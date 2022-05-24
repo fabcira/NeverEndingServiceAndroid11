@@ -8,9 +8,12 @@ import android.app.Service
 import android.content.Intent
 import android.os.*
 import android.os.PowerManager.WakeLock
+import android.provider.Settings
 import android.util.Log
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -21,12 +24,14 @@ class CounterService : Service() {
     private var wakeLock: WakeLock? = null
     private var currentServiceNotification: ServiceNotification? = null
     private val TAG = CounterService::class.java.simpleName
-    private var counter: Int = 0
     private var handler: Handler? = null
     private lateinit var timeoutRunnable: Runnable
 
     companion object {
         var currentService: CounterService? = null
+        // it is static so to make sure that it is always initialised when the viewmodel live data is
+        // is created, otherwise you risk a disconnection
+        var counter: MutableLiveData<Int> = MutableLiveData(0)
         private const val NOTIFICATION_ID = 9974
     }
 
@@ -73,6 +78,9 @@ class CounterService : Service() {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG)
         // you must acquire a wake lock in order to keep the service going
+        // android studio will complain that it does not like the wake lock not to have an ending time
+        // but that is exactly what we need a permanent wake lock - we are implementing a never
+        // ending service!
         wakeLock?.acquire()
     }
 
@@ -85,28 +93,15 @@ class CounterService : Service() {
         looper.let {
             handler = Handler(looper!!)
             timeoutRunnable = Runnable {
-                counter++
+                Log.i(TAG, "Incrementing counter to value ${counter.value!!+1}")
+                counter.value= counter.value!!+1
                 Log.i(TAG, "counter: $counter")
-                saveCounterInLiveData(counter)
                 handler?.postDelayed(timeoutRunnable, 3000)
             }
             handler?.post(timeoutRunnable)
         }
 
     }
-
-    private fun saveCounterInLiveData(counter: Int) {
-        MyViewModel.myViewModel?.viewModelScope?.launch(Dispatchers.IO) {
-            insertCount(counter)
-        }
-    }
-
-    private suspend fun insertCount(counter: Int) {
-        withContext(Dispatchers.Main) {
-            MyViewModel.myViewModel?.currentCounter?.value= counter
-        }
-    }
-
 
 
 

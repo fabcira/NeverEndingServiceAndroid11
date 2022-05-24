@@ -12,15 +12,11 @@ import kotlinx.coroutines.CoroutineScope
 class MyViewModel(application: Application) : AndroidViewModel(application) {
     var TAG = this::class.simpleName
     private val context: Context = application
-    val currentCounter: MutableLiveData<Int> = MutableLiveData()
-
-    companion object{
-        var myViewModel: MyViewModel? = null
-    }
-
+    // this will track the value of the counter in the Service and report it to the MainActivity
+    var currentCounter: MutableLiveData<Int> = CounterService.counter
 
     fun startCounter() {
-        myViewModel = this
+        currentCounter = CounterService.counter
         RestarterBroadcastReceiver.startWorker(context)
     }
 
