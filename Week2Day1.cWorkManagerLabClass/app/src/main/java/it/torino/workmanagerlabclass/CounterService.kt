@@ -6,32 +6,26 @@ package it.torino.workmanagerlabclass
 
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.*
 import android.os.PowerManager.WakeLock
-import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
-import java.util.*
 
 
 class CounterService : Service() {
     private var wakeLock: WakeLock? = null
     private var currentServiceNotification: ServiceNotification? = null
-    private val TAG = CounterService::class.java.simpleName
     private var handler: Handler? = null
     private lateinit var timeoutRunnable: Runnable
 
     companion object {
         var currentService: CounterService? = null
+
         // it is static so to make sure that it is always initialised when the viewmodel live data is
         // is created, otherwise you risk a disconnection
         var counter: MutableLiveData<Int> = MutableLiveData(0)
+        private val TAG = CounterService::class.java.simpleName
         private const val NOTIFICATION_ID = 9974
     }
 
@@ -56,7 +50,11 @@ class CounterService : Service() {
             try {
                 Log.i(TAG, "starting foreground process")
                 currentServiceNotification = ServiceNotification(this, NOTIFICATION_ID, false)
-                startForeground(NOTIFICATION_ID, currentServiceNotification!!.notification)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, currentServiceNotification!!.notification!!, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+                } else {
+                    startForeground(NOTIFICATION_ID, currentServiceNotification!!.notification)
+                }
                 Log.i(TAG, "Starting foreground process successful!")
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting foreground process " + e.message)
@@ -93,17 +91,14 @@ class CounterService : Service() {
         looper.let {
             handler = Handler(looper!!)
             timeoutRunnable = Runnable {
-                Log.i(TAG, "Incrementing counter to value ${counter.value!!+1}")
-                counter.value= counter.value!!+1
+                Log.i(TAG, "Incrementing counter to value ${counter.value!! + 1}")
+                counter.value = counter.value!! + 1
                 Log.i(TAG, "counter: $counter")
                 handler?.postDelayed(timeoutRunnable, 3000)
             }
             handler?.post(timeoutRunnable)
         }
-
     }
-
-
 
     override fun onDestroy() {
         super.onDestroy()
@@ -123,10 +118,5 @@ class CounterService : Service() {
         } catch (e: Exception) {
             Log.i(TAG, "stop counter failed to stop" + e.message)
         }
-
     }
-
-
-
-
 }
