@@ -8,5 +8,5 @@
   <component name="CodeInsightWorkspaceSettings">
     <option name="optimizeImportsOnTheFly" value="true" />
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_6" />
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_6" project-jdk-name="Android API 33, extension level 3 Platform" project-jdk-type="Android SDK" />
 </project>

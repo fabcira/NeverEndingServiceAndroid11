@@ -37,6 +37,11 @@ class MainActivity : AppCompatActivity() {
         viewModel.startCounter()
     }
 
+    override fun onPause() {
+        super.onPause()
+        closeObservers()
+    }
+
     /**
      * it initialises the view model and the methods used to retrieve the live data for the interface
      */
@@ -46,5 +51,13 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "inserting value")
             binding?.value?.text = value.toString()
         }
+    }
+
+    /**
+     * it initialises the view model and the methods used to retrieve the live data for the interface
+     */
+    private fun closeObservers() {
+        Log.i(TAG, "registering Observers: ViewModel? $viewModel")
+        viewModel.currentCounter.removeObservers (this)
     }
 }
