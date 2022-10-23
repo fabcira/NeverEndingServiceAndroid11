@@ -14,6 +14,8 @@ import androidx.lifecycle.MutableLiveData
 
 
 class CounterService : Service() {
+    private var updateTimerThread: Runnable? = null
+    private var wakeLockHandler: Handler? = null
     private var wakeLock: WakeLock? = null
     private var currentServiceNotification: ServiceNotification? = null
     private var handler: Handler? = null
@@ -71,15 +73,31 @@ class CounterService : Service() {
 
     /**
      * it acquires the wakelock
+     * This is not very simple to do. In theory we need a permanent wakelock but that is frowned upon
+     * and I believe Android will kill the app that keeps the wakelock on
+     * So we stop and start the wakelock every 2 hours and we keep it without wakelock for a second
+     * Hopefully this will not cause any issues
      */
     private fun startWakeLock() {
+        Log.i(TAG, "Acquiring the wakelock")
+        val frequency = 120*60*1000L /*120 minutes*/
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG)
-        // you must acquire a wake lock in order to keep the service going
-        // android studio will complain that it does not like the wake lock not to have an ending time
-        // but that is exactly what we need a permanent wake lock - we are implementing a never
-        // ending service!
-        wakeLock?.acquire()
+        updateTimerThread  = kotlinx.coroutines.Runnable {
+            try {
+                wakeLock?.release()
+            } catch (e: Exception) {
+                Log.i(TAG, "ignore: cannot release the wakelock")
+            }
+            Log.i(TAG, "Acquiring the wakelock again")
+            // let's keep 1 second without a wakelock
+            wakeLock?.acquire(frequency - 1000L)
+            wakeLockHandler?.postDelayed(updateTimerThread!!, frequency)
+        }
+        if (Looper.myLooper() == null) Looper.prepare()
+        wakeLockHandler = Handler(Looper.myLooper()!!)
+        wakeLockHandler?.postDelayed(updateTimerThread!!, frequency)
+
     }
 
     /**
@@ -104,8 +122,8 @@ class CounterService : Service() {
         super.onDestroy()
         Log.i(TAG, "CounterService Ondestroy")
         stopCounter()
-        if (wakeLock != null)
-            wakeLock!!.release()
+        wakeLockHandler?.removeCallbacks(updateTimerThread!!)
+        wakeLock?.release()
     }
 
     /**
