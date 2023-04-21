@@ -37,11 +37,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.startCounter()
     }
 
-    override fun onPause() {
-        super.onPause()
-        closeObservers()
-    }
-
     /**
      * it initialises the view model and the methods used to retrieve the live data for the interface
      */
