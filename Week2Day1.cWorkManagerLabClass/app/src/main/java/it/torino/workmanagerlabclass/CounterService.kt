@@ -11,13 +11,19 @@ import android.os.*
 import android.os.PowerManager.WakeLock
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 
 class CounterService : Service() {
     private var wakeLock: WakeLock? = null
     private var currentServiceNotification: ServiceNotification? = null
-    private var handler: Handler? = null
-    private lateinit var timeoutRunnable: Runnable
+    private lateinit var repeatJob :Job
+    private lateinit var wakeLockJob :Job
 
     companion object {
         var currentService: CounterService? = null
@@ -71,41 +77,66 @@ class CounterService : Service() {
 
     /**
      * it acquires the wakelock
+     * This is not very simple to do. In theory we need a permanent wakelock but that is frowned upon
+     * and I believe Android will kill the app that keeps the wakelock on
+     * So we stop and start the wakelock every 2 hours and we keep it without wakelock for a second
+     * Hopefully this will not cause any issues
      */
     private fun startWakeLock() {
+        Log.i(TAG, "Acquiring the wakelock")
+        val frequency = 120*60*1000L /*120 minutes*/
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG)
-        // you must acquire a wake lock in order to keep the service going
-        // android studio will complain that it does not like the wake lock not to have an ending time
-        // but that is exactly what we need a permanent wake lock - we are implementing a never
-        // ending service!
-        wakeLock?.acquire()
+        wakeLockJob  = startRepeatingWakelockJob(frequency)
+    }
+
+    private fun startRepeatingWakelockJob(timeInterval: Long): Job {
+        return CoroutineScope(Dispatchers.Default).launch {
+            while (isActive) {
+                try {
+                    wakeLock?.release()
+                } catch (e: Exception) {
+                    Log.i(TAG, "ignore: cannot release the wakelock")
+                }
+                Log.i(TAG, "Acquiring the wakelock again")
+                // let's keep 1 second without a wakelock
+                wakeLock?.acquire(timeInterval - 1000L)
+                delay(timeInterval)
+            }
+        }
     }
 
     /**
      *  it starts the sensors
      */
-    private fun startCounter() {
-        Log.i(TAG, "Starting the counter...")
-        val looper: Looper? = Looper.myLooper()
-        looper.let {
-            handler = Handler(looper!!)
-            timeoutRunnable = Runnable {
-                Log.i(TAG, "Incrementing counter to value ${counter.value!! + 1}")
-                counter.value = counter.value!! + 1
-                Log.i(TAG, "counter: $counter")
-                handler?.postDelayed(timeoutRunnable, 3000)
+    private fun startRepeatingCountingJob(timeInterval: Long): Job {
+        return CoroutineScope(Dispatchers.Default).launch {
+            while (isActive) {
+                incrementCounter()
+                delay(timeInterval)
             }
-            handler?.post(timeoutRunnable)
         }
+    }
+
+
+    private fun incrementCounter(){
+        Log.i(
+            TAG,
+            "Incrementing counter to value ${counter.value!! + 1}"
+        )
+        counter.postValue(counter.value!!+1)
+        Log.i(TAG, "counter: ${counter.value}")
+    }
+
+    private fun startCounter() {
+        repeatJob  = startRepeatingCountingJob(1000L)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i(TAG, "CounterService Ondestroy")
+        Log.i(TAG, "CounterService onDestroy")
         stopCounter()
-        if (wakeLock != null)
-            wakeLock!!.release()
+        stopWakeLock()
     }
 
     /**
@@ -114,9 +145,21 @@ class CounterService : Service() {
     private fun stopCounter() {
         Log.i(TAG, "stopping counter")
         try {
-
+            if (repeatJob.isActive)
+                repeatJob.cancel()
         } catch (e: Exception) {
             Log.i(TAG, "stop counter failed to stop" + e.message)
         }
+    }
+
+    private fun stopWakeLock(){
+        Log.i(TAG, "stopping counter")
+        try {
+            if (wakeLockJob.isActive)
+                wakeLockJob.cancel()
+        } catch (e: Exception) {
+            Log.i(TAG, "stop counter failed to stop" + e.message)
+        }
+        wakeLock?.release()
     }
 }
